@@ -1,579 +1,671 @@
-#include<stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <time.h>
-#include"lib/sqlite3.h"
-
-#define MAX_WORD_LENGTH 30
+#include "database.h"
+#include "lib/sqlite3.h"
 
 /**
- * @brief 生成 UUID
- * @return UUID 的字符串
+ * @brief ���� UUID
+ * @return UUID �ַ���
  */
-char* generateUUID(){
+char* generateUUID() {
     char* uuid = (char*)malloc(37);
     if (!uuid) return NULL;
+    const char chars[] = "0123456789abcdef";
     srand(time(NULL));
-    const char *chars = "0123456789abcdef";
-
-    for(int i=0; i<8; i++) uuid[i] = chars[rand() % 16];
+    for(int i = 0; i < 8; i++) uuid[i] = chars[rand() % 16];
     uuid[8] = '-';
-    for(int i=9; i<13; i++) uuid[i] = chars[rand() % 16];
+    for(int i = 9; i < 13; i++) uuid[i] = chars[rand() % 16];
     uuid[13] = '-';
-    for(int i=14; i<18; i++) uuid[i] = chars[rand() % 16];
+    for(int i = 14; i < 18; i++) uuid[i] = chars[rand() % 16];
     uuid[18] = '-';
-    for(int i=19; i<23; i++) uuid[i] = chars[rand() % 16];
+    for(int i = 19; i < 23; i++) uuid[i] = chars[rand() % 16];
     uuid[23] = '-';
-    for(int i=24; i<36; i++) uuid[i] = chars[rand() % 16];
+    for(int i = 24; i < 36; i++) uuid[i] = chars[rand() % 16];
     uuid[36] = '\0';
-
     return uuid;
 }
 
+
 /**
- * @brief 对密码进行简单的 hash 加密
- * @param password 原始密码
- * @return hash 后的密码字符串（需要调用方释放）
+ * @brief ���û������������м򵥵� hash ����
+ * @return hash �㷨֮�������
  */
 char* hashPassword(const char* password) {
-    if (!password) return strdup("");
-    
-    char* hash = (char*)malloc(101);
-    if (!hash) return NULL;
-    memset(hash, 0, 101);
-    
-    unsigned int h = 5381;
-    for (int i = 0; password[i]; i++) {
-        h = ((h << 5) + h) + password[i];
+    unsigned int hash = 5381;
+    for(int i = 0; password[i]; i++) {
+        // ����ʽ h[i + 1] = h[i] * 33 + password[i]
+        hash = ((hash << 5) + hash) + password[i];
     }
-    
-    snprintf(hash, 101, "%u", h);
-    return hash;
+    // ���� 11 �ֽڵ��ڴ棬��� 4294967295
+    char* result = (char*)malloc(11);
+    if (!result) return NULL;
+    sprintf(result, "%u", hash);
+    return result;
 }
 
 /**
- * @brief 创建新用户，并自动分配 uuid
- * @param name 用户昵称
- * @param pswd 用户密码，转换为 hash 值后再存入数据库
- * @param level 用户级别 | 0 - admin | 1 - teacher | 2 - student |
- * @param class_name 班级名称（仅student有，可为空）
- * @param num 学号 / 工号
- * @param belong_to 所属教师的uuid（仅student有，可为空）
- * @param showInfo 是否打印新创建用户的信息
- * 
- * @return 若创建成功，返回 1. 否则返回 0
+ * @brief ��ʼ�����ݿ�
+ * @return ���ɹ������� 1�����򷵻� 0��
  */
-int createUser(char* name, char* pswd, int level, char* class_name, int num, char* belong_to, bool showInfo){
-    if (!name || !pswd) return 0;
+int initDatabase(sqlite3* db) {
+    // ���� users ��
+    const char* sql_users = "CREATE TABLE IF NOT EXISTS users (uuid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, user_level INTEGER, class_name TEXT, student_num INTEGER, teacher_uuid TEXT)";
+    // ���� questions ��
+    const char* sql_questions = "CREATE TABLE IF NOT EXISTS questions (qid INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE, translate TEXT NOT NULL, difficulty INTEGER DEFAULT 1)";
+    // ���� answer_records ��
+    const char* sql_answers = "CREATE TABLE IF NOT EXISTS answer_records (aid INTEGER PRIMARY KEY AUTOINCREMENT, student_uuid TEXT, qid INTEGER, user_answer TEXT, is_correct INTEGER, score INTEGER)";
     
-    sqlite3* db = NULL;
-    sqlite3_stmt* stmt = NULL;
-    int rc = sqlite3_open("data.db", &db);
+    char* errmsg = 0; // error message
+    int rc = sqlite3_exec(db, sql_users, 0, 0, &errmsg);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DEBUG] createUser: sqlite3_open failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-        sqlite3_close(db);
+        fprintf(stderr, "[ERROR] Create users table failed: %s\n", errmsg);
         return 0;
+    }
+    rc = sqlite3_exec(db, sql_questions, 0, 0, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Create questions table failed: %s\n", errmsg);
+        return 0;
+    }
+    rc = sqlite3_exec(db, sql_answers, 0, 0, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Create answers table failed: %s\n", errmsg);
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * @brief �����û�
+ * @return �´����û��� UUID
+ */
+char* createUser(const char* username, const char* password, int level, const char* class_name, int num, const char* teacher_uuid) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return NULL;
+    }
+    if (!initDatabase(db)) {
+        sqlite3_close(db);
+        return NULL;
     }
     
     char* uuid = generateUUID();
-    char* pswd_hash = hashPassword(pswd);
-    
-    if (!uuid || !pswd_hash) {
-        fprintf(stderr, "[DEBUG] createUser: memory alloc failed (uuid=%p, pswd_hash=%p)\n", (void*)uuid, (void*)pswd_hash);
-        if (stmt) sqlite3_finalize(stmt);
+    if (!uuid) {
         sqlite3_close(db);
-        free(uuid);
-        free(pswd_hash);
-        return 0;
+        return NULL;
     }
-    const char* sql = "INSERT INTO usr (uuid, usr_name, pswd_hash, usr_level, class_name, num, belong_to) VALUES (?, ?, ?, ?, ?, ?, ?);";
     
+    char* pswd_hash = hashPassword(password);
+    if (!pswd_hash) {
+        free(uuid);
+        sqlite3_close(db);
+        return NULL;
+    }
+    
+    const char* sql = "INSERT INTO users VALUES(?, ?, ?, ?, ?, ?, ?)";
+    sqlite3_stmt* stmt = NULL;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DEBUG] createUser: sqlite3_prepare_v2 failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-        free(uuid);
+        fprintf(stderr, "[ERROR] Prepare SQL failed: %s\n", sqlite3_errmsg(db));
         free(pswd_hash);
-        sqlite3_finalize(stmt);
+        free(uuid);
         sqlite3_close(db);
-        return 0;
+        return NULL;
     }
     
     sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, username, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, pswd_hash, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 4, level);
-    sqlite3_bind_text(stmt, 5, class_name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 5, class_name ? class_name : "", -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 6, num);
-    sqlite3_bind_text(stmt, 7, belong_to, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 7, teacher_uuid ? teacher_uuid : "", -1, SQLITE_STATIC);
     
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) {
-        fprintf(stderr, "[DEBUG] createUser: sqlite3_step failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-    }
-    int result = (rc == SQLITE_DONE) ? 1 : 0;
-    
-    if (result && showInfo) {
-        printf("[SUCCESS] User created successfully!\n");
-        printf("UUID: %s\n", uuid);
-        printf("用户名: %s\n", name);
-        printf("密码哈希: %s\n", pswd_hash);
-        printf("用户级别: %d\n", level);
-        printf("班级: %s\n", class_name ? class_name : "");
-        printf("学号/工号: %d\n", num);
-        printf("所属教师: %s\n", belong_to ? belong_to : "");
-    } else if (!result) {
-        fprintf(stderr, "[DEBUG] createUser: insertion failed\n");
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "[ERROR] Insert user failed: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        free(pswd_hash);
+        free(uuid);
+        sqlite3_close(db);
+        return NULL;
     }
     
     sqlite3_finalize(stmt);
-    free(uuid);
     free(pswd_hash);
     sqlite3_close(db);
     
-    return result;
+    printf("[SUCCESS] User created: %s\n", username);
+    return uuid;
 }
 
-/**
- * @brief 根据uuid删除usr表中指定的用户，需二次确认
- * @param uuid 要删除的用户的uuid
- * 
- * @return 若删除成功，返回 1. 否则返回 0. 若用户取消删除，返回 -1
- */
-int deleteUser(char* uuid){
-    if (!uuid) return 0;
+char* loginUser(const char* username, const char* password) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return NULL;
+    }
     
-    sqlite3* db = NULL;
+    const char* sql = "SELECT uuid, password_hash FROM users WHERE username = ?";
     sqlite3_stmt* stmt = NULL;
-    int rc = sqlite3_open("data.db", &db);
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DEBUG] deleteUser: sqlite3_open failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
         sqlite3_close(db);
-        return 0;
+        return NULL;
     }
     
-    // 首先查询要删除的用户信息
-    const char* select_sql = "SELECT uuid, usr_name, usr_level, class_name, num, belong_to FROM usr WHERE uuid = ?;";
-    rc = sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DEBUG] deleteUser: sqlite3_prepare_v2 (SELECT) failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
+    sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+        fprintf(stderr, "[ERROR] User not found\n");
         sqlite3_finalize(stmt);
         sqlite3_close(db);
-        return 0;
+        return NULL;
     }
     
-    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+    const char* stored_uuid = (const char*)sqlite3_column_text(stmt, 0);
+    const char* stored_hash = (const char*)sqlite3_column_text(stmt, 1);
     
-    // 获取用户信息
-    char* user_name = NULL;
-    int user_level = -1;
-    char* class_name = NULL;
-    int num = -1;
-    char* belong_to = NULL;
-    bool user_found = false;
-    
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW) {
-        user_found = true;
-        const unsigned char* name_ptr = sqlite3_column_text(stmt, 1);
-        const unsigned char* class_ptr = sqlite3_column_text(stmt, 3);
-        const unsigned char* belong_ptr = sqlite3_column_text(stmt, 5);
-        
-        user_name = strdup((const char*)(name_ptr ? name_ptr : (const unsigned char*)""));
-        user_level = sqlite3_column_int(stmt, 2);
-        class_name = strdup((const char*)(class_ptr ? class_ptr : (const unsigned char*)""));
-        num = sqlite3_column_int(stmt, 4);
-        belong_to = strdup((const char*)(belong_ptr ? belong_ptr : (const unsigned char*)""));
-    } else if (rc != SQLITE_DONE) {
-        fprintf(stderr, "[DEBUG] deleteUser: sqlite3_step (SELECT) failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-    }
-    
-    sqlite3_finalize(stmt);
-    stmt = NULL;
-    
-    // 如果用户不存在，返回 0
-    if (!user_found) {
-        fprintf(stderr, "[DEBUG] deleteUser: user not found (uuid=%s)\n", uuid);
-        sqlite3_close(db);
-        return 0;
-    }
-    
-    // 二次确认：显示用户信息并要求确认
-    printf("\n========== 删除用户确认 ==========\n");
-    printf("UUID: %s\n", uuid);
-    printf("用户名: %s\n", user_name ? user_name : "");
-    printf("用户级别: %d\n", user_level);
-    printf("班级: %s\n", class_name ? class_name : "");
-    printf("学号/工号: %d\n", num);
-    printf("所属教师: %s\n", belong_to ? belong_to : "");
-    printf("================================\n");
-    printf("确定要删除此用户吗？ (y/n): ");
-    char confirm[10];
-    scanf("%s", confirm);
-    
-    
-    if (!confirm) {
-        printf("输入错误，删除已取消。\n");
-        free(user_name);
-        free(class_name);
-        free(belong_to);
-        sqlite3_close(db);
-        return -1;
-    }
-    
-    // 检查确认输入
-    if (confirm[0] != 'y' && confirm[0] != 'Y') {
-        printf("删除已取消。\n");
-        free(user_name);
-        free(class_name);
-        free(belong_to);
-        sqlite3_close(db);
-        return -1;
-    }
-    
-    /*
-    // 第二次确认
-    printf("请再次输入 'DELETE' 确认删除: ");
-    fflush(stdout);
-    
-    char confirm2[20];
-    if (!fgets(confirm2, sizeof(confirm2), stdin)) {
-        printf("输入错误，删除已取消。\n");
-        free(user_name);
-        free(class_name);
-        free(belong_to);
-        sqlite3_close(db);
-        return -1;
-    }
-    
-    // 去掉换行符
-    size_t len = strcspn(confirm2, "\r\n");
-    confirm2[len] = '\0';
-    
-    // 检查第二次确认
-    if (strcmp(confirm2, "DELETE") != 0) {
-        printf("确认字符不匹配，删除已取消。\n");
-        free(user_name);
-        free(class_name);
-        free(belong_to);
-        sqlite3_close(db);
-        return -1;
-    }*/
-    
-    // 执行删除操作
-    const char* delete_sql = "DELETE FROM usr WHERE uuid = ?;";
-    rc = sqlite3_prepare_v2(db, delete_sql, -1, &stmt, NULL);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[DEBUG] deleteUser: sqlite3_prepare_v2 (DELETE) failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-        free(user_name);
-        free(class_name);
-        free(belong_to);
+    char* input_hash = hashPassword(password);
+    if (!input_hash || strcmp(stored_hash, input_hash) != 0) {
+        fprintf(stderr, "[ERROR] Password incorrect\n");
+        if (input_hash) free(input_hash);
         sqlite3_finalize(stmt);
         sqlite3_close(db);
-        return 0;
+        return NULL;
     }
     
-    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
-    
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) {
-        fprintf(stderr, "[DEBUG] deleteUser: sqlite3_step (DELETE) failed: %s (rc=%d)\n", sqlite3_errmsg(db), rc);
-    }
-    int result = (rc == SQLITE_DONE) ? 1 : 0;
-    
-    if (result) {
-        printf("\n[SUCCESS] 用户已成功删除！\n");
-        printf("已删除的用户信息:\n");
-        printf("  UUID: %s\n", uuid);
-        printf("  用户名: %s\n", user_name ? user_name : "");
-        printf("  用户级别: %d\n", user_level);
-        printf("  班级: %s\n", class_name ? class_name : "");
-        printf("  学号/工号: %d\n", num);
-        printf("  所属教师: %s\n\n", belong_to ? belong_to : "");
-    } else {
-        fprintf(stderr, "[DEBUG] deleteUser: deletion failed\n");
-    }
-    
+    char* result = strdup(stored_uuid);
+    free(input_hash);
     sqlite3_finalize(stmt);
-    free(user_name);
-    free(class_name);
-    free(belong_to);
     sqlite3_close(db);
     
     return result;
 }
 
-
-
-/** 题面 / 试卷，数据来源是 dict.db
- * @param num 编号
- * @param word 单词
- * @param word_puzzled 被随机抹去若干个字母的单词
- * @param hint 中文翻译
- * @param next 链表的next指针
- * @param fromDB 来自哪个数据库
- * @param fromTable 来自哪个表
- */ 
-struct Items{
-    int num;
-    char* word;
-    char* word_puzzled;
-    char* hint;
-    struct Items* next;
-
-    char* fromDB;
-    char* fromTable;
-};
-
-/** 
- * @brief 答题卡，数据来源是 dict.db
- * @param num 编号（与试卷对应）
- * @param ans 用户的答案
- * @param isRight <boolean>是否正确
- * @param fromItem <Items*> 指向对应试卷节点的指针
- * @param next 链表的 next 指针
- *  */ 
-struct AnsSheet{
-    int num;
-    char* ans;
-    bool isRight;
-    struct Items* fromItem;
-    struct AnsSheet* next;  
-};
-
-
 /**
- * @brief 从数据库中调取数据，生成quiz到链表中
- * @param count 生成题目的数量
- * @param db 从哪个数据库调用数据
- * @return 试卷链表的头部节点
+ * @brief ѯ���û�Ȩ�޵ȼ�
+ * @param uuid �û��� UUID
+ * @return Ȩ�޵ȼ� 0=Admin 1=Teacher 2=Student
  */
-struct Items* generateQuiz(int count, sqlite3* db, const char* table){
-    if(count <= 0 || db == NULL || table == NULL) return NULL;
-
-    // 动态 SQL 查询
-    char statement_table[256];
-    snprintf(statement_table, sizeof(statement_table), "SELECT word, translate FROM %s ORDER BY RANDOM() LIMIT ?;", table);
+int getUserLevel(const char* uuid) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) return -1;
     
+    const char* sql = "SELECT user_level FROM users WHERE uuid = ?";
     sqlite3_stmt* stmt = NULL;
-    int rc = sqlite3_prepare_v2(db, statement_table, -1, &stmt, NULL);
-    if(rc != SQLITE_OK) {
-        if(stmt) sqlite3_finalize(stmt);
-        return NULL;
-    }
-
-    rc = sqlite3_bind_int(stmt, 1, count);
-    if(rc != SQLITE_OK){
-        sqlite3_finalize(stmt);
-        return NULL;
-    }
-
-    // 利用时间生成随机数
-    srand((unsigned)time(NULL));
-
-    struct Items* head = NULL;
-    struct Items* tail = NULL;
-    int idx = 0;
-
-    while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
-        const unsigned char* w = sqlite3_column_text(stmt, 0); // column: word
-        const unsigned char* t = sqlite3_column_text(stmt, 1); // column: translate
-        if(!w) continue;
-
-        struct Items* node = (struct Items*)malloc(sizeof(struct Items)); // 给节点分配内存
-        if(!node) break;
-        memset(node, 0, sizeof(*node)); // 将节点初始化为 0 
-
-        idx++;
-        node->num = idx;
-
-        // copy word
-        const char* word_src = (const char*)w;
-        node->word = strdup(word_src ? word_src : "");
-        if(!node->word){ free(node); break; }
-
-        // 将src的任一字母换成下划线（出题）
-        size_t len = strlen(node->word);
-        node->word_puzzled = (char*)malloc(len + 1);
-        if(node->word_puzzled){
-            strcpy(node->word_puzzled, node->word);
-            if(len > 0){
-                size_t i = (size_t)(rand() % len);
-                node->word_puzzled[i] = '_';
-            }
-        }
-
-        // hint from translate column
-        {
-            const char* hint_src = (const char*)t;
-            node->hint = strdup(hint_src ? hint_src : "");
-        }
-        node->next = NULL;
-
-        if(head == NULL) head = tail = node;
-        else { tail->next = node; tail = node; }
-    }
-
-    sqlite3_finalize(stmt);
-    return head;
-}
-
-/**
- * 打印试卷 / 预览试卷
- * @param head 传入头部节点
- * @param showAns <boolean> 是否显示答案
- */
-void printItems(const struct Items* head, bool showAns){
-    const struct Items* cur = head; // cur is for current node
-    while(cur){
-        printf("  No.%d: %s\n", cur->num, cur->word_puzzled ? cur->word_puzzled : "");
-        printf("  hint: %s\n\n", cur->hint ? cur->hint : "");
-        if(showAns) printf("  ans: %s\n", cur->word ? cur->word : "");
-        cur = cur->next;
-    }
-}
-
-/**
- * @brief 释放链表结构体成员被动态分配的内存，并将传入的 head 指针设置为 NULL
- * @param head_ptr 链表的头部节点的地址
- */
-void freeItems(struct Items** head_ptr){
-    struct Items* cur = *head_ptr;
-    while(cur){
-        struct Items* next = cur->next;
-        free(cur->word);
-        free(cur->word_puzzled);
-        free(cur->hint);
-        free(cur);
-        cur = next;
-    }
-    *head_ptr = NULL;
-}
-
-/**
- * @brief 根据某个试卷记录答案（不再打印详细答题卡，返回答题卡链表）
- * @param fromItem <Items*> 指向试卷特定节点的指针
- * @return 答题卡链表头指针（需要调用方负责释放）
- */
-struct AnsSheet* recordAns(struct Items* fromItem){
-    if(fromItem == NULL) return NULL;
-
-    struct AnsSheet* head = NULL;
-    struct AnsSheet* tail = NULL;
-
-    struct Items* item = fromItem;
-    int idx = 0;
-    char buf[MAX_WORD_LENGTH + 2]; // 留一个位置给 '\0' 
-
-    // 逐题询问并构建答题卡链表
-    while(item){
-        idx++;
-        // 显示题号、被抹去的单词与提示
-        printf("? No.%d: %s\n", idx, item->word_puzzled ? item->word_puzzled : "");
-        printf("  hint: %s\n", item->hint ? item->hint : "");
-        printf("  your ans: ");
-
-        if(!fgets(buf, sizeof(buf), stdin)){
-            // 读取失败，结束输入循环
-            break;
-        }
-        // 去掉尾部换行
-        size_t l = strcspn(buf, "\r\n");
-        buf[l] = '\0';
-
-        // 分配并初始化答题卡节点
-        struct AnsSheet* node = (struct AnsSheet*)malloc(sizeof(struct AnsSheet));
-        if(!node) break;
-        memset(node, 0, sizeof(*node));
-
-        node->num = idx;
-        node->ans = strdup(buf ? buf : "");
-        node->fromItem = item;
-        node->isRight = (node->ans && item->word && strcmp(node->ans, item->word) == 0);
-        node->next = NULL;
-
-        if(head == NULL) head = tail = node;
-        else { tail->next = node; tail = node; }
-
-        item = item->next;
-    }
-
-    // 汇总并展示结果（不再展示每题详细信息）
-    int total = 0, correct = 0;
-    struct AnsSheet* cur = head;
-    while(cur){
-        total++;
-        if(cur->isRight) correct++;
-        cur = cur->next;
-    }
-    printf("\n正确率: %d/%d \n\n", correct, total);
-
-    return head;
-}
-
-/**
- * @brief 展示答题卡的详细内容（不释放）
- * @param head 答题卡链表头指针
- */
-void showData(const struct AnsSheet* head){
-    const struct AnsSheet* cur = head;
-    while(cur){
-        printf("%s No.%d: 你的答案：'%s' 正确答案：'%s'\n",
-               cur->isRight ? "√" : "×",
-               cur->num,
-               cur->ans ? cur->ans : "",
-               cur->fromItem && cur->fromItem->word ? cur->fromItem->word : ""
-        );
-        cur = cur->next;
-    }
-}
-
-/**
- * @brief 释放答题卡链表内存并将指针设定为 NULL
- * @param head_ptr 答题卡链表头指针的地址
- */
-void freeAnsSheet(struct AnsSheet** head_ptr){
-    if(!head_ptr || !*head_ptr) return;
-    struct AnsSheet* cur = *head_ptr;
-    while(cur){
-        struct AnsSheet* next = cur->next;
-        free(cur->ans);
-        free(cur);
-        cur = next;
-    }
-    *head_ptr = NULL;
-}
-
-int main(){
-    int rc1 = SQLITE_ERROR;
-    sqlite3* db1 = NULL;
-    rc1 = sqlite3_open("dict.db", &db1); 
-    if(rc1 == SQLITE_ERROR){
-        sqlite3_log(sqlite3_errcode(db1), "Failed to open\n");
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(db);
         return -1;
     }
-
     
-    createUser("huarun", "6609695", 2, "306", 30616, NULL, true);
+    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+    
+    int level = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        level = sqlite3_column_int(stmt, 0);
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return level;
+}
 
-    struct Items* quiz = generateQuiz(1, db1, "CET4"); // 生成链表，quiz是链表头部节点
+/**
+ * @brief ɾ���û�
+ * @return ��ɾ���ɹ������� 1
+ */
+int deleteUser(const char* uuid) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) return 0;
+    
+    const char* sql = "DELETE FROM users WHERE uuid = ?";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    printf("[SUCCESS] User deleted\n");
+    return 1;
+}
 
-    //printItems(quiz, false);
+/**
+ * @brief ������Ŀ
+ * @param word Ӣ�ĵ���
+ * @param translate ��Ӧ�ķ���
+ * @return �����ӳɹ������� 1
+ */
+int addQuestion(const char* word, const char* translate) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return 0;
+    }
+    
+    const char* sql = "INSERT INTO questions (word, translate) VALUES (?, ?)";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_bind_text(stmt, 1, word, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, translate, -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "[ERROR] Add question failed\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    } else {
+        printf("[SUCCESS] Question added\n");
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 1;
+}
 
-    struct AnsSheet* sheet = recordAns(quiz);
+/**
+ * @brief ɾ����Ŀ
+ * @return ��ɾ���ɹ������� 1
+ */
+int deleteQuestion(int qid) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) return 0;
+    
+    const char* sql = "DELETE FROM questions WHERE qid = ?";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_bind_int(stmt, 1, qid);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "[ERROR] Delete question failed\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    } else {
+        printf("[SUCCESS] Question deleted\n");
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 1;
+}
 
-    showData(sheet);
+/**
+ * @brief 
+ * @return �����ɵ��Ծ���������
+ */
+struct Question* getQuestions(int* count) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        *count = 0;
+        return NULL;
+    }
+    
+    const char* sql = "SELECT COUNT(*) FROM questions";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK || sqlite3_step(stmt) != SQLITE_ROW) {
+        *count = 0;
+        if (stmt) sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return NULL;
+    }
+    
+    *count = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+    
+    if (*count == 0) {
+        sqlite3_close(db);
+        return NULL;
+    }
+    
+    // Ϊ�Ծ��������������ڴ�
+    struct Question* questions = (struct Question*)malloc(sizeof(struct Question) * (*count));
+    sql = "SELECT qid, word, translate FROM questions";
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    
+    int idx = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW && idx < *count) {
+        questions[idx].qid = sqlite3_column_int(stmt, 0);
+        strncpy(questions[idx].word, (const char*)sqlite3_column_text(stmt, 1), MAX_WORD_LENGTH - 1);
+        strncpy(questions[idx].translate, (const char*)sqlite3_column_text(stmt, 2), MAX_TRANS_LENGTH - 1);
+        idx++;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return questions;
+}
 
-    freeAnsSheet(&sheet);
+void freeQuestions(struct Question* q) {
+    if (q) free(q);
+}
 
-    freeItems(&quiz);
 
-    // 删除用户-开始
-    printf("请输入要删除的用户的uuid: \n");
-    char delete_uuid[50];
-    scanf("%s", delete_uuid);
-    deleteUser(delete_uuid);
-    //删除用户-结束
+/**
+ * @brief ��������¼
+ * @param student_uuid ѧ���� UUID
+ * @param qid ��Ŀ ID
+ * @param user_answer �û��Ĵ�
+ * @param is_correct �Ƿ���ȷ
+ * @param score �������
+ * @return ������ɹ������� 1
+ */
+int saveAnswerRecord(const char* student_uuid, int qid, const char* user_answer, int is_correct, int score) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return 0;
+    }
+    
+    const char* sql = "INSERT INTO answer_records (student_uuid, qid, user_answer, is_correct, score) VALUES (?, ?, ?, ?, ?)";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_bind_text(stmt, 1, student_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, qid);
+    sqlite3_bind_text(stmt, 3, user_answer, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 4, is_correct);
+    sqlite3_bind_int(stmt, 5, score);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "[ERROR] Save answer failed\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 1;
+}
 
-    sqlite3_close(db1);
+struct GradeInfo* getGradesByName(const char* username, int* count) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        *count = 0;
+        return NULL;
+    }
+    
+    const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.username LIKE ? GROUP BY u.uuid";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        *count = 0;
+        return NULL;
+    }
+    
+    char pattern[110];
+    snprintf(pattern, sizeof(pattern), "%%%s%%", username);
+    sqlite3_bind_text(stmt, 1, pattern, -1, SQLITE_STATIC);
+    
+    int capacity = 10;
+    struct GradeInfo* grades = (struct GradeInfo*)malloc(sizeof(struct GradeInfo) * capacity);
+    *count = 0;
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (*count >= capacity) {
+            capacity *= 2;
+            grades = (struct GradeInfo*)realloc(grades, sizeof(struct GradeInfo) * capacity);
+        }
+        
+        strncpy(grades[*count].uuid, (const char*)sqlite3_column_text(stmt, 0), 36);
+        strncpy(grades[*count].username, (const char*)sqlite3_column_text(stmt, 1), 99);
+        strncpy(grades[*count].class_name, (const char*)sqlite3_column_text(stmt, 2), 49);
+        grades[*count].student_num = sqlite3_column_int(stmt, 3);
+        grades[*count].total_score = sqlite3_column_int(stmt, 4);
+        grades[*count].total_questions = sqlite3_column_int(stmt, 5);
+        grades[*count].accuracy = sqlite3_column_double(stmt, 6);
+        
+        (*count)++;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return grades;
+}
+
+struct GradeInfo* getGradesByClass(const char* class_name, int* count) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        *count = 0;
+        return NULL;
+    }
+    
+    const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.class_name = ? AND u.user_level = 2 GROUP BY u.uuid ORDER BY SUM(ar.score) DESC";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        *count = 0;
+        return NULL;
+    }
+    
+    sqlite3_bind_text(stmt, 1, class_name, -1, SQLITE_STATIC);
+    
+    int capacity = 20;
+    struct GradeInfo* grades = (struct GradeInfo*)malloc(sizeof(struct GradeInfo) * capacity);
+    *count = 0;
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (*count >= capacity) {
+            capacity *= 2;
+            grades = (struct GradeInfo*)realloc(grades, sizeof(struct GradeInfo) * capacity);
+        }
+        
+        strncpy(grades[*count].uuid, (const char*)sqlite3_column_text(stmt, 0), 36);
+        strncpy(grades[*count].username, (const char*)sqlite3_column_text(stmt, 1), 99);
+        strncpy(grades[*count].class_name, (const char*)sqlite3_column_text(stmt, 2), 49);
+        grades[*count].student_num = sqlite3_column_int(stmt, 3);
+        grades[*count].total_score = sqlite3_column_int(stmt, 4);
+        grades[*count].total_questions = sqlite3_column_int(stmt, 5);
+        grades[*count].accuracy = sqlite3_column_double(stmt, 6);
+        
+        (*count)++;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return grades;
+}
+
+struct GradeInfo* getGradesByStudentNumRange(int min_num, int max_num, int* count) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        *count = 0;
+        return NULL;
+    }
+    
+    const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.student_num >= ? AND u.student_num <= ? AND u.user_level = 2 GROUP BY u.uuid ORDER BY u.student_num ASC";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        *count = 0;
+        return NULL;
+    }
+    
+    sqlite3_bind_int(stmt, 1, min_num);
+    sqlite3_bind_int(stmt, 2, max_num);
+    
+    int capacity = 20;
+    struct GradeInfo* grades = (struct GradeInfo*)malloc(sizeof(struct GradeInfo) * capacity);
+    *count = 0;
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (*count >= capacity) {
+            capacity *= 2;
+            grades = (struct GradeInfo*)realloc(grades, sizeof(struct GradeInfo) * capacity);
+        }
+        
+        strncpy(grades[*count].uuid, (const char*)sqlite3_column_text(stmt, 0), 36);
+        strncpy(grades[*count].username, (const char*)sqlite3_column_text(stmt, 1), 99);
+        strncpy(grades[*count].class_name, (const char*)sqlite3_column_text(stmt, 2), 49);
+        grades[*count].student_num = sqlite3_column_int(stmt, 3);
+        grades[*count].total_score = sqlite3_column_int(stmt, 4);
+        grades[*count].total_questions = sqlite3_column_int(stmt, 5);
+        grades[*count].accuracy = sqlite3_column_double(stmt, 6);
+        
+        (*count)++;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return grades;
+}
+
+void statisticsByClass(const char* class_name) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return;
+    }
+    
+    const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.class_name = ? AND u.user_level = 2 GROUP BY u.uuid ORDER BY SUM(ar.score) DESC";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        return;
+    }
+    
+    sqlite3_bind_text(stmt, 1, class_name, -1, SQLITE_STATIC);
+    
+    int count_90 = 0, count_80 = 0, count_70 = 0, count_60 = 0, count_other = 0;
+    int total_students = 0;
+    
+    printf("\n=== Grade Statistics for Class: %s ===\n", class_name);
+    printf("%-20s %-15s %-10s %-10s\n", "Name", "Class", "Number", "Score");
+    printf("%-20s %-15s %-10s %-10s\n", "--------------------", "---------------", "----------", "----------");
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* username = (const char*)sqlite3_column_text(stmt, 1);
+        const char* cls = (const char*)sqlite3_column_text(stmt, 2);
+        int num = sqlite3_column_int(stmt, 3);
+        int score = sqlite3_column_int(stmt, 4);
+        
+        printf("%-20s %-15s %-10d %-10d\n", username, cls, num, score);
+        
+        total_students++;
+        if (score >= 90) count_90++;
+        else if (score >= 80) count_80++;
+        else if (score >= 70) count_70++;
+        else if (score >= 60) count_60++;
+        else count_other++;
+    }
+    
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    
+    printf("\n=== ����ͳ�� ===\n");
+    printf("90-100: %d students\n", count_90);
+    printf("80-89:  %d students\n", count_80);
+    printf("70-79:  %d students\n", count_70);
+    printf("60-69:  %d students\n", count_60);
+    printf("<60:    %d students\n", count_other);
+    printf("Total:  %d students\n", total_students);
+}
+
+int startQuiz(const char* student_uuid, const char* student_name, const char* class_name, int student_num) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return 0;
+    }
+    
+    int count = 0;
+    struct Question* questions = getQuestions(&count);
+    if (!questions || count == 0) {
+        printf("[ERROR] No questions available\n");
+        sqlite3_close(db);
+        return 0;
+    }
+    
+    int points_per_question = 100 / count;
+    int total_score = 0;
+    int correct_count = 0;
+    
+    printf("\n====== Quiz: English Vocabulary ======\n");
+    printf("������Ϣ: %s (�༶: %s, ѧ��: %d)\n", student_name, class_name, student_num);
+    printf("��Ŀ����: %d, ÿ�����: %d\n", count, points_per_question);
+    printf("======================================\n\n");
+    
+    for (int i = 0; i < count; i++) {
+        printf("[Question %d/%d]\n", i + 1, count);
+        printf("English: %s\n", questions[i].word);
+        printf("Translation: ");
+        
+        char user_answer[MAX_TRANS_LENGTH];
+        fgets(user_answer, sizeof(user_answer), stdin);
+        user_answer[strcspn(user_answer, "\r\n")] = 0;
+        
+        int is_correct = (strcmp(user_answer, questions[i].translate) == 0) ? 1 : 0;
+        int score = is_correct ? points_per_question : 0;
+        total_score += score;
+        if (is_correct) correct_count++;
+        
+        saveAnswerRecord(student_uuid, questions[i].qid, user_answer, is_correct, score);
+        
+        printf(">> ��ȷ��: %s [%s]\n\n", questions[i].translate, is_correct ? "CORRECT" : "WRONG");
+    }
+    
+    printf("\n====== ���Խ�� ======\n");
+    printf("����: %s\n", student_name);
+    printf("��ȷ��: %d / %d\n", correct_count, count);
+    printf("�ܷ�: %d / 100\n", total_score);
+    printf("��ȷ��: %.2f%%\n", (correct_count * 100.0) / count);
+    printf("========================\n\n");
+    
+    free(questions);
+    sqlite3_close(db);
+    return total_score;
+}
+
+void freeGrades(struct GradeInfo* grades) {
+    if (grades) free(grades);
 }

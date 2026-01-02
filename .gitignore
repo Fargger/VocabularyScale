@@ -1,0 +1,5 @@
+.vscode/
+debug/
+*.exe
+*.dll
+init_db.sql

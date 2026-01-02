@@ -8,7 +8,7 @@
                 "-fdiagnostics-color=always",
                 "-g",
                 "${fileDirname}\\*.c",
-                "lib\\sqlite3.c",
+                "D:\\Huarun233\\GDUT\\assignment\\program_lab\\design\\VocabularyScale\\lib\\sqlite3.c",
                 "-o",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe"
             ],
