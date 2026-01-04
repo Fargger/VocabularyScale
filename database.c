@@ -6,8 +6,8 @@
 #include "lib/sqlite3.h"
 
 /**
- * @brief Éú³É UUID
- * @return UUID ×Ö·û´®
+ * @brief ç”Ÿæˆ UUID
+ * @return UUID å­—ç¬¦ä¸²
  */
 char* generateUUID() {
     char* uuid = (char*)malloc(37);
@@ -29,16 +29,16 @@ char* generateUUID() {
 
 
 /**
- * @brief ¶ÔÓÃ»§ÊäÈëµÄÃÜÂë½øĞĞ¼òµ¥µÄ hash ¼ÓÃÜ
- * @return hash Ëã·¨Ö®ºóµÄÃÜÂë
+ * @brief å¯¹ç”¨æˆ·è¾“å…¥çš„å¯†ç è¿›è¡Œç®€å•çš„ hash åŠ å¯†
+ * @return hash ç®—æ³•ä¹‹åçš„å¯†ç 
  */
 char* hashPassword(const char* password) {
     unsigned int hash = 5381;
     for(int i = 0; password[i]; i++) {
-        // µİÍÆÊ½ h[i + 1] = h[i] * 33 + password[i]
+        // é€’æ¨å¼ h[i + 1] = h[i] * 33 + password[i]
         hash = ((hash << 5) + hash) + password[i];
     }
-    // ·ÖÅä 11 ×Ö½ÚµÄÄÚ´æ£¬×î´ó 4294967295
+    // åˆ†é… 11 å­—èŠ‚çš„å†…å­˜ï¼Œæœ€å¤§ 4294967295
     char* result = (char*)malloc(11);
     if (!result) return NULL;
     sprintf(result, "%u", hash);
@@ -46,15 +46,15 @@ char* hashPassword(const char* password) {
 }
 
 /**
- * @brief ³õÊ¼»¯Êı¾İ¿â
- * @return Èô³É¹¦£¬·µ»Ø 1£»·ñÔò·µ»Ø 0¡£
+ * @brief åˆå§‹åŒ–æ•°æ®åº“
+ * @return è‹¥æˆåŠŸï¼Œè¿”å› 1ï¼›å¦åˆ™è¿”å› 0ã€‚
  */
 int initDatabase(sqlite3* db) {
-    // ´´½¨ users ±í
+    // åˆ›å»º users è¡¨
     const char* sql_users = "CREATE TABLE IF NOT EXISTS users (uuid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, user_level INTEGER, class_name TEXT, student_num INTEGER, teacher_uuid TEXT)";
-    // ´´½¨ questions ±í
+    // åˆ›å»º questions è¡¨
     const char* sql_questions = "CREATE TABLE IF NOT EXISTS questions (qid INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE, translate TEXT NOT NULL, difficulty INTEGER DEFAULT 1)";
-    // ´´½¨ answer_records ±í
+    // åˆ›å»º answer_records è¡¨
     const char* sql_answers = "CREATE TABLE IF NOT EXISTS answer_records (aid INTEGER PRIMARY KEY AUTOINCREMENT, student_uuid TEXT, qid INTEGER, user_answer TEXT, is_correct INTEGER, score INTEGER)";
     
     char* errmsg = 0; // error message
@@ -77,8 +77,8 @@ int initDatabase(sqlite3* db) {
 }
 
 /**
- * @brief ´´½¨ÓÃ»§
- * @return ĞÂ´´½¨ÓÃ»§µÄ UUID
+ * @brief åˆ›å»ºç”¨æˆ·
+ * @return æ–°åˆ›å»ºç”¨æˆ·çš„ UUID
  */
 char* createUser(const char* username, const char* password, int level, const char* class_name, int num, const char* teacher_uuid) {
     sqlite3 *db;
@@ -141,6 +141,9 @@ char* createUser(const char* username, const char* password, int level, const ch
     return uuid;
 }
 
+/**
+ * @brief ç”¨æˆ·ç™»å½•
+ */
 char* loginUser(const char* username, const char* password) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -187,9 +190,9 @@ char* loginUser(const char* username, const char* password) {
 }
 
 /**
- * @brief Ñ¯ÎÊÓÃ»§È¨ÏŞµÈ¼¶
- * @param uuid ÓÃ»§µÄ UUID
- * @return È¨ÏŞµÈ¼¶ 0=Admin 1=Teacher 2=Student
+ * @brief è¯¢é—®ç”¨æˆ·æƒé™ç­‰çº§
+ * @param uuid ç”¨æˆ·çš„ UUID
+ * @return æƒé™ç­‰çº§ 0=Admin 1=Teacher 2=Student
  */
 int getUserLevel(const char* uuid) {
     sqlite3 *db;
@@ -217,8 +220,8 @@ int getUserLevel(const char* uuid) {
 }
 
 /**
- * @brief É¾³ıÓÃ»§
- * @return ÈôÉ¾³ı³É¹¦£¬·µ»Ø 1
+ * @brief åˆ é™¤ç”¨æˆ·
+ * @return è‹¥åˆ é™¤æˆåŠŸï¼Œè¿”å› 1
  */
 int deleteUser(const char* uuid) {
     sqlite3 *db;
@@ -247,10 +250,10 @@ int deleteUser(const char* uuid) {
 }
 
 /**
- * @brief Ìí¼ÓÌâÄ¿
- * @param word Ó¢ÎÄµ¥´Ê
- * @param translate ¶ÔÓ¦µÄ·­Òë
- * @return ÈôÌí¼Ó³É¹¦£¬·µ»Ø 1
+ * @brief æ·»åŠ é¢˜ç›®
+ * @param word è‹±æ–‡å•è¯
+ * @param translate å¯¹åº”çš„ç¿»è¯‘
+ * @return è‹¥æ·»åŠ æˆåŠŸï¼Œè¿”å› 1
  */
 int addQuestion(const char* word, const char* translate) {
     sqlite3 *db;
@@ -287,8 +290,8 @@ int addQuestion(const char* word, const char* translate) {
 }
 
 /**
- * @brief É¾³ıÌâÄ¿
- * @return ÈôÉ¾³ı³É¹¦£¬·µ»Ø 1
+ * @brief åˆ é™¤é¢˜ç›®
+ * @return è‹¥åˆ é™¤æˆåŠŸï¼Œè¿”å› 1
  */
 int deleteQuestion(int qid) {
     sqlite3 *db;
@@ -320,7 +323,7 @@ int deleteQuestion(int qid) {
 
 /**
  * @brief 
- * @return ½«Éú³ÉµÄÊÔ¾í·ÅÈëÁ´±í
+ * @return å°†ç”Ÿæˆçš„è¯•å·æ”¾å…¥é“¾è¡¨
  */
 struct Question* getQuestions(int* count) {
     sqlite3 *db;
@@ -348,7 +351,7 @@ struct Question* getQuestions(int* count) {
         return NULL;
     }
     
-    // ÎªÊÔ¾í£¨Á´±í£©·ÖÅäÄÚ´æ
+    // ä¸ºè¯•å·ï¼ˆé“¾è¡¨ï¼‰åˆ†é…å†…å­˜
     struct Question* questions = (struct Question*)malloc(sizeof(struct Question) * (*count));
     sql = "SELECT qid, word, translate FROM questions";
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -366,19 +369,21 @@ struct Question* getQuestions(int* count) {
     return questions;
 }
 
+/**
+ * @brief é‡Šæ”¾è¯•å·æ‰€å çš„å†…å­˜
+ */
 void freeQuestions(struct Question* q) {
     if (q) free(q);
 }
 
-
 /**
- * @brief ±£´æ´ğÌâ¼ÇÂ¼
- * @param student_uuid Ñ§ÉúµÄ UUID
- * @param qid ÌâÄ¿ ID
- * @param user_answer ÓÃ»§µÄ´ğ°¸
- * @param is_correct ÊÇ·ñÕıÈ·
- * @param score ¸ÃÌâ·ÖÊı
- * @return Èô±£´æ³É¹¦£¬·µ»Ø 1
+ * @brief ä¿å­˜ç­”é¢˜è®°å½•
+ * @param student_uuid å­¦ç”Ÿçš„ UUID
+ * @param qid é¢˜ç›® ID
+ * @param user_answer ç”¨æˆ·çš„ç­”æ¡ˆ
+ * @param is_correct æ˜¯å¦æ­£ç¡®
+ * @param score è¯¥é¢˜åˆ†æ•°
+ * @return è‹¥ä¿å­˜æˆåŠŸï¼Œè¿”å› 1
  */
 int saveAnswerRecord(const char* student_uuid, int qid, const char* user_answer, int is_correct, int score) {
     sqlite3 *db;
@@ -415,6 +420,9 @@ int saveAnswerRecord(const char* student_uuid, int qid, const char* user_answer,
     return 1;
 }
 
+/**
+ * @brief æŒ‰å§“åè·å–æˆç»©
+ */
 struct GradeInfo* getGradesByName(const char* username, int* count) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -463,6 +471,9 @@ struct GradeInfo* getGradesByName(const char* username, int* count) {
     return grades;
 }
 
+/**
+ * @brief æŒ‰ç­çº§è·å–æˆç»©
+ */
 struct GradeInfo* getGradesByClass(const char* class_name, int* count) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -471,6 +482,7 @@ struct GradeInfo* getGradesByClass(const char* class_name, int* count) {
         return NULL;
     }
     
+    // u - users; ar - arswer_records
     const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.class_name = ? AND u.user_level = 2 GROUP BY u.uuid ORDER BY SUM(ar.score) DESC";
     sqlite3_stmt* stmt = NULL;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -509,6 +521,9 @@ struct GradeInfo* getGradesByClass(const char* class_name, int* count) {
     return grades;
 }
 
+/**
+ * @brief æŒ‰å­¦ç”Ÿå­¦å·è¿”å›è·å–æˆç»©
+ */
 struct GradeInfo* getGradesByStudentNumRange(int min_num, int max_num, int* count) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -556,6 +571,10 @@ struct GradeInfo* getGradesByStudentNumRange(int min_num, int max_num, int* coun
     return grades;
 }
 
+/**
+ * @brief æŒ‰ç­çº§ç»Ÿè®¡æ•°æ®ï¼Œå¹¶æŒ‰åˆ†æ•°æ®µè¾“å‡º
+ * @param class_name 
+ */
 void statisticsByClass(const char* class_name) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -588,6 +607,7 @@ void statisticsByClass(const char* class_name) {
         int num = sqlite3_column_int(stmt, 3);
         int score = sqlite3_column_int(stmt, 4);
         
+        // å›ºå®šè¾“å‡ºé—´è· 20 15 10 10
         printf("%-20s %-15s %-10d %-10d\n", username, cls, num, score);
         
         total_students++;
@@ -601,7 +621,7 @@ void statisticsByClass(const char* class_name) {
     sqlite3_finalize(stmt);
     sqlite3_close(db);
     
-    printf("\n=== ·ÖÊıÍ³¼Æ ===\n");
+    printf("\n=== åˆ†æ•°ç»Ÿè®¡ ===\n");
     printf("90-100: %d students\n", count_90);
     printf("80-89:  %d students\n", count_80);
     printf("70-79:  %d students\n", count_70);
@@ -610,6 +630,9 @@ void statisticsByClass(const char* class_name) {
     printf("Total:  %d students\n", total_students);
 }
 
+/**
+ * @brief å¼€å§‹ç­”é¢˜
+ */
 int startQuiz(const char* student_uuid, const char* student_name, const char* class_name, int student_num) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
@@ -629,10 +652,16 @@ int startQuiz(const char* student_uuid, const char* student_name, const char* cl
     int points_per_question = 100 / count;
     int total_score = 0;
     int correct_count = 0;
+
+    /* ä¸ºè®°å½•å­¦ç”Ÿç­”æ¡ˆå‡†å¤‡ä¸´æ—¶æ•°ç»„ */
+    char **q_words = (char**)malloc(sizeof(char*) * count);
+    char **u_answers = (char**)malloc(sizeof(char*) * count);
+    char **c_answers = (char**)malloc(sizeof(char*) * count);
+    for (int i = 0; i < count; ++i) { q_words[i] = u_answers[i] = c_answers[i] = NULL; }
     
     printf("\n====== Quiz: English Vocabulary ======\n");
-    printf("¿¼ÉúĞÅÏ¢: %s (°à¼¶: %s, Ñ§ºÅ: %d)\n", student_name, class_name, student_num);
-    printf("ÌâÄ¿ÊıÁ¿: %d, Ã¿Ìâ·ÖÊı: %d\n", count, points_per_question);
+    printf("è€ƒç”Ÿä¿¡æ¯: %s (ç­çº§: %s, å­¦å·: %d)\n", student_name, class_name, student_num);
+    printf("é¢˜ç›®æ•°é‡: %d, æ¯é¢˜åˆ†æ•°: %d\n", count, points_per_question);
     printf("======================================\n\n");
     
     for (int i = 0; i < count; i++) {
@@ -640,32 +669,56 @@ int startQuiz(const char* student_uuid, const char* student_name, const char* cl
         printf("English: %s\n", questions[i].word);
         printf("Translation: ");
         
-        char user_answer[MAX_TRANS_LENGTH];
-        fgets(user_answer, sizeof(user_answer), stdin);
-        user_answer[strcspn(user_answer, "\r\n")] = 0;
+    char user_answer[MAX_TRANS_LENGTH];
+    fgets(user_answer, sizeof(user_answer), stdin);
+    user_answer[strcspn(user_answer, "\r\n")] = 0;
         
         int is_correct = (strcmp(user_answer, questions[i].translate) == 0) ? 1 : 0;
         int score = is_correct ? points_per_question : 0;
         total_score += score;
         if (is_correct) correct_count++;
         
-        saveAnswerRecord(student_uuid, questions[i].qid, user_answer, is_correct, score);
+    saveAnswerRecord(student_uuid, questions[i].qid, user_answer, is_correct, score);
+    /* ä¿å­˜åˆ°ä¸´æ—¶æ•°ç»„ï¼Œä¾›å¯¼å‡ºä½¿ç”¨ï¼ˆå¤åˆ¶å­—ç¬¦ä¸²ï¼‰ */
+    q_words[i] = strdup(questions[i].word);
+    u_answers[i] = strdup(user_answer);
+    c_answers[i] = strdup(questions[i].translate);
         
-        printf(">> ÕıÈ·´ğ°¸: %s [%s]\n\n", questions[i].translate, is_correct ? "CORRECT" : "WRONG");
+        /* ä¿å­˜ç­”é¢˜è¯¦æƒ…åˆ° stu.txtï¼ˆæ¯é¢˜çš„å­¦ç”Ÿç­”æ¡ˆå’Œæ­£ç¡®ç­”æ¡ˆï¼‰ */
+        /* è¿™é‡Œåªä¸´æ—¶æ”¶é›†é—®é¢˜ã€å­¦ç”Ÿç­”æ¡ˆå’Œæ­£ç¡®ç­”æ¡ˆåˆ°æ•°ç»„ï¼Œæœ€åä¸€æ¬¡æ€§å†™å…¥æ–‡ä»¶ */
+        /* å°†åœ¨å¾ªç¯å¤–ç»Ÿä¸€å¤„ç† */
+        
+        printf(">> æ­£ç¡®ç­”æ¡ˆ: %s [%s]\n\n", questions[i].translate, is_correct ? "CORRECT" : "WRONG");
     }
     
-    printf("\n====== ²âÊÔ½á¹û ======\n");
-    printf("¿¼Éú: %s\n", student_name);
-    printf("ÕıÈ·Êı: %d / %d\n", correct_count, count);
-    printf("×Ü·Ö: %d / 100\n", total_score);
-    printf("ÕıÈ·ÂÊ: %.2f%%\n", (correct_count * 100.0) / count);
+    printf("\n====== æµ‹è¯•ç»“æœ ======\n");
+    printf("è€ƒç”Ÿ: %s\n", student_name);
+    printf("æ­£ç¡®æ•°: %d / %d\n", correct_count, count);
+    printf("æ€»åˆ†: %d / 100\n", total_score);
+    printf("æ­£ç¡®ç‡: %.2f%%\n", (correct_count * 100.0) / count);
     printf("========================\n\n");
     
+    /* å°†ç­”é¢˜æ˜ç»†è¿½åŠ åˆ° stu.txtï¼ˆè°ƒç”¨ file_ioï¼‰ */
+    /* æ£€æµ‹ addStuAnsToFile çš„ç¬¦å·åœ¨é“¾æ¥æ—¶å­˜åœ¨ */
+    /* å¤–éƒ¨å‡½æ•°åœ¨ file_io.c ä¸­å®ç°ï¼Œç›´æ¥è°ƒç”¨ */
+    extern int addStuAnsToFile(const char*, const char*, const char*, int, int, const char**, const char**, const char**);
+    addStuAnsToFile("stu.txt", student_name, class_name, student_num, count, (const char**)q_words, (const char**)u_answers, (const char**)c_answers);
+
+    /* é‡Šæ”¾ä¸´æ—¶æ•°ç»„ */
+    for (int i = 0; i < count; ++i) {
+        if (q_words[i]) free(q_words[i]);
+        if (u_answers[i]) free(u_answers[i]);
+        if (c_answers[i]) free(c_answers[i]);
+    }
+    free(q_words); free(u_answers); free(c_answers);
     free(questions);
     sqlite3_close(db);
     return total_score;
 }
 
+/**
+ * @brief é‡Šæ”¾è¯»å–æˆç»©æ—¶çš„å†…å­˜
+ */
 void freeGrades(struct GradeInfo* grades) {
     if (grades) free(grades);
 }

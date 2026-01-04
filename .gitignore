@@ -1,5 +1,6 @@
 .vscode/
 debug/
+report/
 *.exe
 *.dll
-init_db.sql
+*.sql

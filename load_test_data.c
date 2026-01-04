@@ -24,7 +24,10 @@ static void generate_uuid_v4(char out[37]) {
             b[10], b[11], b[12], b[13], b[14], b[15]);
 }
 
-void load_test_data() {
+/**
+ * @brief 生成测试用户数据。包含 stu0 - stu9。stu0-stu4 班级为 1，stu4-stu9 班级为 2。
+ */
+void load_test_user_data() {
     sqlite3 *db = NULL;
     sqlite3_stmt *stmt = NULL;
     int rc;
@@ -99,4 +102,88 @@ void load_test_data() {
     sqlite3_close(db);
 
     printf("\n测试数据已写入数据库。\n");
+}
+
+/**
+ * @brief 加载样本题目（至少 5 道）到数据库
+ * 样本题目：常见英文单词及其翻译
+ */
+void load_sample_questions(void) {
+    sqlite3 *db = NULL;
+    sqlite3_stmt *stmt = NULL;
+    int rc;
+
+    rc = sqlite3_open("vocab_system.db", &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+
+    /* 若数据库中已经存在题目，则不载入测试数据。 */
+    const char *check_sql = "SELECT COUNT(*) FROM questions";
+    sqlite3_stmt *check_stmt = NULL;
+    rc = sqlite3_prepare_v2(db, check_sql, -1, &check_stmt, NULL);
+    if(rc == SQLITE_OK && sqlite3_step(check_stmt) == SQLITE_ROW){
+        int count = sqlite3_column_int(check_stmt, 0);
+        sqlite3_finalize(check_stmt);
+        if(count > 0){
+            sqlite3_close(db);
+            printf("在当前数据库读取到 %d 道题目。\n", count);
+            return;
+        }
+    }
+
+
+    const char *transaction = "BEGIN TRANSACTION;";
+    rc = sqlite3_exec(db, transaction, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to begin transaction: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return;
+    }
+
+    const char *insert_sql = "INSERT INTO questions (word, translate) VALUES (?, ?)";
+    rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to insert data: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return;
+    }
+
+    /* 10 个样本题目 */
+    const char *samples[][2] = {
+        {"apple", "苹果"},
+        {"book", "书"},
+        {"cat", "猫"},
+        {"dog", "狗"},
+        {"elephant", "象"},
+        {"friend", "朋友"},
+        {"house", "房子"},
+        {"idea", "主意"},
+        {"journey", "旅程"},
+        {"kingdom", "王国"}
+    };
+
+    for (int i = 0; i < 10; ++i) {
+        sqlite3_bind_text(stmt, 1, samples[i][0], -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, samples[i][1], -1, SQLITE_TRANSIENT);
+
+        rc = sqlite3_step(stmt);
+        if (rc != SQLITE_DONE) {
+            fprintf(stderr, "插入题目 %s 失败: %s\n", samples[i][0], sqlite3_errmsg(db));
+            sqlite3_finalize(stmt);
+            sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+            sqlite3_close(db);
+            return;
+        }
+
+        sqlite3_reset(stmt);
+        sqlite3_clear_bindings(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+    sqlite3_close(db);
+
+    printf("检测到当前题目数据库为空。已自动加载 10 道样本题目。\n");
 }

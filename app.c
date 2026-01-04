@@ -3,6 +3,7 @@
 #include <string.h>
 #include "database.h"
 #include "load_test_data.h"
+#include "file_io.h"
 
 char current_user_uuid[37] = {0};
 char current_username[100] = {0};
@@ -10,6 +11,9 @@ char current_user_class[50] = {0};
 int current_user_num = 0;
 int current_user_level = -1;
 
+/**
+ * @brief 显示主菜单
+ */
 void show_main_menu() {
     printf("\n");
     if (current_user_uuid[0] == '\0') {
@@ -26,6 +30,7 @@ void show_main_menu() {
             printf("4. 题目管理\n");
             printf("5. 查询成绩\n");
             printf("6. 统计\n");
+                printf("7. 文件导出\n");
         }
         if (current_user_level == 2) {
             printf("4. 开始测验\n");
@@ -36,6 +41,9 @@ void show_main_menu() {
     printf("选择：");
 }
 
+/**
+ * @brief 注册用户
+ */
 void register_user() {
     char username[100], password[100], classname[50];
     int level, num;
@@ -73,6 +81,9 @@ void register_user() {
     }
 }
 
+/**
+ * @brief 用户登录
+ */
 void login_user() {
     char username[100], password[100];
     printf("\n=== 登录 ===\n");
@@ -96,6 +107,9 @@ void login_user() {
     }
 }
 
+/**
+ * @brief 用户登出
+ */
 void logout_user() {
     memset(current_user_uuid, 0, 37);
     memset(current_username, 0, 100);
@@ -103,6 +117,9 @@ void logout_user() {
     printf("[成功] 已注销\n");
 }
 
+/**
+ * @brief 题目管理菜单
+ */
 void manage_questions_menu() {
     int subchoice;
     while (1) {
@@ -155,6 +172,9 @@ void manage_questions_menu() {
     }
 }
 
+/**
+ * @brief 查询成绩菜单
+ */
 void query_grades_menu() {
     int subchoice;
     while (1) {
@@ -235,19 +255,73 @@ void query_grades_menu() {
     }
 }
 
+/**
+ * @brief 
+ */
 void statistics_menu() {
     char classname[50];
     printf("班级名称：");
     fgets(classname, sizeof(classname), stdin);
+    // strcspn()
     classname[strcspn(classname, "\r\n")] = 0;
     statisticsByClass(classname);
+}
+
+/**
+ * @brief 文件导出菜单
+ */
+void file_export_menu() {
+    int subchoice;
+    while (1) {
+        printf("\n=== 文件导出 ===\n");
+        printf("1. 导出题目到 timu.txt\n");
+        printf("2. 导出成绩到 stu.txt\n");
+        printf("3. 导出按成绩排序的结果 (sort1.txt)\n");
+        printf("4. 导出按班级排序的结果 (sort2.txt)\n");
+        printf("0. 返回\n");
+        printf("选择：");
+        scanf("%d", &subchoice);
+        getchar();
+        
+        if (subchoice == 1) {
+            if (exportQuestionsToFile("timu.txt")) {
+                printf("[成功] 题目已导出到 timu.txt\n");
+            } else {
+                printf("[错误] 题目导出失败\n");
+            }
+        } else if (subchoice == 2) {
+            if (exportGradesToFile("stu.txt")) {
+                printf("[成功] 成绩已导出到 stu.txt\n");
+            } else {
+                printf("[错误] 成绩导出失败\n");
+            }
+        } else if (subchoice == 3) {
+            if (exportGradesByScoreToFile("sort1.txt")) {
+                printf("[成功] 成绩（按分数排序）已导出到 sort1.txt\n");
+            } else {
+                printf("[错误] 成绩导出失败\n");
+            }
+        } else if (subchoice == 4) {
+            if (exportGradesByClassToFile("sort2.txt")) {
+                printf("[成功] 成绩（按班级排序）已导出到 sort2.txt\n");
+            } else {
+                printf("[错误] 成绩导出失败\n");
+            }
+        } else if (subchoice == 0) {
+            break;
+        } else {
+            printf("[错误] 无效选择\n");
+        }
+    }
 }
 
 int main() {
     int choice;
     printf("\n====== Vocabulary Scale ======\n");
-    /* 启动时自动加载测试数据（如果需要可在 load_test_data 中做存在性检查） */
-    load_test_data();
+    /* 启动时自动加载测试数据（如果需要可在 load_test_user_data 中做存在性检查） */
+    load_test_user_data();
+    /* 加载样本题目（只有在题库为空时才会插入） */
+    load_sample_questions();
     
     while (1) {
         show_main_menu();
@@ -285,8 +359,13 @@ int main() {
                 query_grades_menu();
             } else if (choice == 6 && current_user_level <= 1) {
                 statistics_menu();
+            } else if (choice == 7 && current_user_level <= 1) {
+                file_export_menu();
             } else if (choice == 4 && current_user_level == 2) {
-                startQuiz(current_user_uuid, current_username, current_user_class, current_user_num);
+                int score = startQuiz(current_user_uuid, current_username, current_user_class, current_user_num);
+                /* 答题完成后，自动将成绩追加到 stu.txt */
+                addStuGradeToFile("stu.txt", current_user_uuid, current_username, 
+                                        current_user_class, current_user_num, score);
             } else if (choice == 5 && current_user_level == 2) {
                 int count = 0;
                 struct GradeInfo* grades = getGradesByName(current_username, &count);
