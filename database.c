@@ -4,6 +4,7 @@
 #include <time.h>
 #include "database.h"
 #include "lib/sqlite3.h"
+#include "load_test_data.h"
 
 /**
  * @brief 生成 UUID
@@ -45,36 +46,7 @@ char* hashPassword(const char* password) {
     return result;
 }
 
-/**
- * @brief 初始化数据库
- * @return 若成功，返回 1；否则返回 0。
- */
-int initDatabase(sqlite3* db) {
-    // 创建 users 表
-    const char* sql_users = "CREATE TABLE IF NOT EXISTS users (uuid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, user_level INTEGER, class_name TEXT, student_num INTEGER, teacher_uuid TEXT)";
-    // 创建 questions 表
-    const char* sql_questions = "CREATE TABLE IF NOT EXISTS questions (qid INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE, translate TEXT NOT NULL, difficulty INTEGER DEFAULT 1)";
-    // 创建 answer_records 表
-    const char* sql_answers = "CREATE TABLE IF NOT EXISTS answer_records (aid INTEGER PRIMARY KEY AUTOINCREMENT, student_uuid TEXT, qid INTEGER, user_answer TEXT, is_correct INTEGER, score INTEGER)";
-    
-    char* errmsg = 0; // error message
-    int rc = sqlite3_exec(db, sql_users, 0, 0, &errmsg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[ERROR] Create users table failed: %s\n", errmsg);
-        return 0;
-    }
-    rc = sqlite3_exec(db, sql_questions, 0, 0, &errmsg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[ERROR] Create questions table failed: %s\n", errmsg);
-        return 0;
-    }
-    rc = sqlite3_exec(db, sql_answers, 0, 0, &errmsg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "[ERROR] Create answers table failed: %s\n", errmsg);
-        return 0;
-    }
-    return 1;
-}
+/* initDatabase 已迁移到 load_test_data.c - 在程序启动时调用以确保表存在 */
 
 /**
  * @brief 创建用户

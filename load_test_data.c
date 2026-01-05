@@ -5,7 +5,41 @@
 #include "lib/sqlite3.h"
 #include "database.h"
 
-/* 生成 UUID v4，输出 buffer 至至少 37 字节（含终止符） */
+/**
+ * @brief 初始化数据库（创建必要的表）
+ * @return 成功返回 1，失败返回 0
+ */
+int initDatabase(sqlite3* db) {
+    /* 创建 users 表 */
+    const char* sql_users = "CREATE TABLE IF NOT EXISTS users (uuid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, user_level INTEGER, class_name TEXT, student_num INTEGER, teacher_uuid TEXT)";
+    /* 创建 questions 表 */
+    const char* sql_questions = "CREATE TABLE IF NOT EXISTS questions (qid INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL UNIQUE, translate TEXT NOT NULL, difficulty INTEGER DEFAULT 1)";
+    /* 创建 answer_records 表 */
+    const char* sql_answers = "CREATE TABLE IF NOT EXISTS answer_records (aid INTEGER PRIMARY KEY AUTOINCREMENT, student_uuid TEXT, qid INTEGER, user_answer TEXT, is_correct INTEGER, score INTEGER)";
+
+    char* errmsg = 0;
+    int rc = sqlite3_exec(db, sql_users, 0, 0, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Create users table failed: %s\n", errmsg);
+        return 0;
+    }
+    rc = sqlite3_exec(db, sql_questions, 0, 0, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Create questions table failed: %s\n", errmsg);
+        return 0;
+    }
+    rc = sqlite3_exec(db, sql_answers, 0, 0, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Create answers table failed: %s\n", errmsg);
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * @brief 生成 UUID v4，输出 buffer 至至少 37 字节（含终止符）
+ * @param out 输出生成结果到 out 中
+ */
 static void generate_uuid_v4(char out[37]) {
     unsigned char b[16];
     for (int i = 0; i < 16; ++i) {
@@ -25,13 +59,14 @@ static void generate_uuid_v4(char out[37]) {
 }
 
 /**
- * @brief 生成测试用户数据。包含 stu0 - stu9。stu0-stu4 班级为 1，stu4-stu9 班级为 2。
+ * @brief 生成测试用户数据。包含 stu0 - stu9。stu0-stu4 班级为 1，stu4-stu9 班级为 2。 
  */
 void load_test_user_data() {
     sqlite3 *db = NULL;
     sqlite3_stmt *stmt = NULL;
     int rc;
 
+    // 以时间为种子生成随机数
     srand((unsigned)time(NULL));
 
     rc = sqlite3_open("vocab_system.db", &db);
@@ -40,7 +75,8 @@ void load_test_user_data() {
         return;
     }
 
-    rc = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    const char *sql = "BEGIN TRANSACTION";
+    rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Transaction Failed: %s\n", sqlite3_errmsg(db));
         sqlite3_close(db);
@@ -57,10 +93,62 @@ void load_test_user_data() {
         return;
     }
 
+    // 插入 teacher0 的测试数据
+
+    char teacher0_uuid[37];
+    generate_uuid_v4(teacher0_uuid);
+
+    sqlite3_bind_text(stmt, 1, teacher0_uuid, -1, SQLITE_TRANSIENT); // uuid
+    sqlite3_bind_text(stmt, 2, "teacher0", -1, SQLITE_TRANSIENT); // username
+    sqlite3_bind_text(stmt, 3, "177621", -1, SQLITE_TRANSIENT); // password_hash
+    sqlite3_bind_int(stmt, 4, 1); // user_level = 1 (teacher)
+    sqlite3_bind_text(stmt, 5, "1", -1, SQLITE_TRANSIENT); // class_name
+    sqlite3_bind_null(stmt, 6); // student_num = NULL for teacher
+    sqlite3_bind_null(stmt, 7); // teacher_uuid = NULL for teacher
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "插入 teacher0 失败: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+        sqlite3_close(db);
+        return;
+    }
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
+
+    // 插入 teacher1 的测试数据
+
+    char teacher1_uuid[37];
+    generate_uuid_v4(teacher1_uuid);
+
+    sqlite3_bind_text(stmt, 1, teacher1_uuid, -1, SQLITE_TRANSIENT); // uuid
+    sqlite3_bind_text(stmt, 2, "teacher1", -1, SQLITE_TRANSIENT); // username
+    sqlite3_bind_text(stmt, 3, "177621", -1, SQLITE_TRANSIENT); // password_hash
+    sqlite3_bind_int(stmt, 4, 1); // user_level = 1 (teacher)
+    sqlite3_bind_text(stmt, 5, "1", -1, SQLITE_TRANSIENT); // class_name
+    sqlite3_bind_null(stmt, 6); // student_num = NULL for teacher
+    sqlite3_bind_null(stmt, 7); // teacher_uuid = NULL for teacher
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "插入 teacher1 失败: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+        sqlite3_close(db);
+        return;
+    }
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
+
+
+    // 插入 stu0 - stu9 的测试数据
+
     for (int i = 0; i < 10; ++i) {
+        
         char uuid[37];
         char username[32];
-        const char *password_hash = "177621";
+        const char *password_hash = "177621"; // stu0 - stu9 的密码均为 0， hash 值为 177621
         int user_level = 2;
         const char *class_name;
         const char *teacher_uuid;
@@ -70,10 +158,10 @@ void load_test_user_data() {
 
         if (i >= 0 && i <= 4) {
             class_name = "1";
-            teacher_uuid = "50615c09-71e9-4bc7-875b-62718ec0873d";
+            teacher_uuid = teacher0_uuid;
         } else {
             class_name = "2";
-            teacher_uuid = "238d3617-beea-46df-b2b6-b1f9d213f4d4";
+            teacher_uuid = teacher1_uuid;
         }
 
         sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_TRANSIENT);
@@ -81,7 +169,7 @@ void load_test_user_data() {
         sqlite3_bind_text(stmt, 3, password_hash, -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 4, user_level);
         sqlite3_bind_text(stmt, 5, class_name, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 6, i);
+        sqlite3_bind_int(stmt, 6, i+100); // 测试数据学号统一为 10x
         sqlite3_bind_text(stmt, 7, teacher_uuid, -1, SQLITE_TRANSIENT);
 
         rc = sqlite3_step(stmt);

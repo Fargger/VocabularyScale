@@ -318,6 +318,21 @@ void file_export_menu() {
 int main() {
     int choice;
     printf("\n====== Vocabulary Scale ======\n");
+    /* 在程序启动时初始化数据库表结构（迁移后的 initDatabase 在 load_test_data.c 中实现） */
+    {
+        sqlite3 *db = NULL;
+        int rc = sqlite3_open("vocab_system.db", &db);
+        if (rc != SQLITE_OK) {
+            fprintf(stderr, "[ERROR] Cannot open database to init: %s\n", sqlite3_errmsg(db));
+            if (db) sqlite3_close(db);
+        } else {
+            if (!initDatabase(db)) {
+                fprintf(stderr, "[ERROR] initDatabase failed\n");
+            }
+            sqlite3_close(db);
+        }
+    }
+
     /* 启动时自动加载测试数据（如果需要可在 load_test_user_data 中做存在性检查） */
     load_test_user_data();
     /* 加载样本题目（只有在题库为空时才会插入） */

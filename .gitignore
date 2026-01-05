@@ -1,6 +1,9 @@
 .vscode/
 debug/
 report/
+init_db.sql
+vocab_system.de
+vocab_system_refer.db
+*.txt
 *.exe
 *.dll
-*.sql
