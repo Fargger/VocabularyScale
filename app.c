@@ -23,13 +23,12 @@ void show_main_menu() {
         printf("0. 退出\n");
     } else {
         printf("欢迎，%s（等级 %d）\n", current_username, current_user_level);
-        printf("1. 更改密码\n");
         printf("2. 注销\n");
         printf("3. 删除账户\n");
         if (current_user_level <= 1) {
             printf("4. 题目管理\n");
-            printf("5. 查询成绩\n");
-            printf("6. 统计\n");
+            printf("5. 按 姓名 / 学号 / 班级 查询成绩\n");
+            printf("6. 按班级输出统计数据\n");
                 printf("7. 文件导出\n");
         }
         if (current_user_level == 2) {
@@ -134,10 +133,10 @@ void manage_questions_menu() {
         
         if (subchoice == 1) {
             char word[100], trans[200];
-            printf("英文单词：");
+            printf("单词（word）：");
             fgets(word, sizeof(word), stdin);
             word[strcspn(word, "\r\n")] = 0;
-            printf("翻译：");
+            printf("翻译（translate）：");
             fgets(trans, sizeof(trans), stdin);
             trans[strcspn(trans, "\r\n")] = 0;
             
@@ -360,8 +359,6 @@ int main() {
         } else {
             if (choice == 0) {
                 break;
-            } else if (choice == 1) {
-                printf("[待办] 更改密码\n");
             } else if (choice == 2) {
                 logout_user();
             } else if (choice == 3) {
@@ -398,6 +395,6 @@ int main() {
         }
     }
     
-    printf("\n再见！\n");
+    printf("\nbyebye~!\n");
     return 0;
 }
