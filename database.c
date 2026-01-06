@@ -46,7 +46,7 @@ char* hashPassword(const char* password) {
     return result;
 }
 
-/* initDatabase 已迁移到 load_test_data.c - 在程序启动时调用以确保表存在 */
+/* initDatabase 已迁移到 load_test_data.c */
 
 /**
  * @brief 创建用户
@@ -348,9 +348,8 @@ void freeQuestions(struct Question* q) {
     if (q) free(q);
 }
 
-/*
+/** 
  * @brief 生成带下划线的单词提示（puzzled），例如 "conversation" -> "conver_ation"
- *        方法：在单词中间位置替换一个字符为 '_'（如果单词长度太短则不替换）
  */
 static void make_puzzled(const char* word, char* out, int out_size) {
     if (!word || !out || out_size <= 0) return;
@@ -584,6 +583,8 @@ void statisticsByClass(const char* class_name) {
         return;
     }
     
+    // 统计特定班级中所有学生的成绩，并计算出正确率
+    // 按总得分降序排序
     const char* sql = "SELECT u.uuid, u.username, u.class_name, u.student_num, SUM(ar.score), COUNT(ar.aid), CAST(SUM(ar.is_correct) AS FLOAT) / COUNT(ar.aid) FROM users u LEFT JOIN answer_records ar ON u.uuid = ar.student_uuid WHERE u.class_name = ? AND u.user_level = 2 GROUP BY u.uuid ORDER BY SUM(ar.score) DESC";
     sqlite3_stmt* stmt = NULL;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -599,7 +600,7 @@ void statisticsByClass(const char* class_name) {
     int total_students = 0;
     
     printf("\n=== Grade Statistics for Class: %s ===\n", class_name);
-    printf("%-20s %-15s %-10s %-10s\n", "Name", "Class", "Number", "Score");
+    printf("%-20s %-15s %-10s %-10s\n", "姓名", "班级", "学号", "分数");
     printf("%-20s %-15s %-10s %-10s\n", "--------------------", "---------------", "----------", "----------");
     
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -660,7 +661,7 @@ int startQuiz(const char* student_uuid, const char* student_name, const char* cl
     char **c_answers = (char**)malloc(sizeof(char*) * count);
     for (int i = 0; i < count; ++i) { q_words[i] = u_answers[i] = c_answers[i] = NULL; }
     
-    printf("\n====== Quiz: English Vocabulary ======\n");
+    printf("\n====== Quiz: Vocabulary Scale ======\n");
     printf("考生信息: %s (班级: %s, 学号: %d)\n", student_name, class_name, student_num);
     printf("题目数量: %d, 每题分数: %d\n", count, points_per_question);
     printf("======================================\n\n");
@@ -670,7 +671,7 @@ int startQuiz(const char* student_uuid, const char* student_name, const char* cl
         /* 生成并显示 word_puzzled，并显示翻译，要求输入正确的英文单词 */
         char puzzled[MAX_WORD_LENGTH];
         make_puzzled(questions[i].word, puzzled, sizeof(puzzled));
-        printf("Puzzled: %s\n", puzzled);
+        printf("No. %d: %s\n", i, puzzled);
         printf("Translation: %s\n", questions[i].translate);
         printf("Your answer: ");
 
@@ -695,7 +696,7 @@ int startQuiz(const char* student_uuid, const char* student_name, const char* cl
         /* 这里只临时收集问题、学生答案和正确答案到数组，最后一次性写入文件 */
         /* 将在循环外统一处理 */
         
-        printf(">> 正确答案: %s [%s]\n\n", questions[i].translate, is_correct ? "CORRECT" : "WRONG");
+        printf(">> 正确答案: %s [%s]\n\n", questions[i].word, is_correct ? "CORRECT" : "WRONG");
     }
     
     printf("\n====== 测试结果 ======\n");

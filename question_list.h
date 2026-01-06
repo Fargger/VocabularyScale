@@ -3,19 +3,19 @@
 
 #include "database.h"
 
-/* é“¾è¡¨èŠ‚ç‚¹ï¼Œä¿å­˜ä¸€æ¡é¢˜ç›®ä¿¡æ¯ */
+/* Á´±í½Úµã£¬±£´æÒ»ÌõÌâÄ¿ĞÅÏ¢ */
 struct QuestionNode {
     struct Question q;
     struct QuestionNode* next;
 };
 
 /*
- * è·å–é¢˜ç›®é“¾è¡¨ï¼ˆæŒ‰ qid å‡åºï¼‰
- * è¿”å›é“¾è¡¨å¤´ï¼Œcount è¾“å‡ºé¢˜ç›®æ•°é‡ï¼ˆå¯ä¸º NULLï¼‰
+ * »ñÈ¡ÌâÄ¿Á´±í£¨°´ qid ÉıĞò£©
+ * ·µ»ØÁ´±íÍ·£¬count Êä³öÌâÄ¿ÊıÁ¿£¨¿ÉÎª NULL£©
  */
 struct QuestionNode* getQuestionsLL(int* count);
 
-/* é‡Šæ”¾é¢˜ç›®é“¾è¡¨ */
+/* ÊÍ·ÅÌâÄ¿Á´±í */
 void freeQuestionList(struct QuestionNode* head);
 
 #endif /* QUESTION_LIST_H */
