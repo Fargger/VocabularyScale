@@ -35,8 +35,9 @@ int getUserLevel(const char* uuid);
 int deleteUser(const char* uuid);
 
 /* 题目管理函数 */
-int addQuestion(const char* word, const char* translate);
-int deleteQuestion(int qid);
+int addSingleQuestion(const char* word, const char* translate);
+int addQuestion(const char* source);
+int deleteSingleQuestion(int qid);
 struct Question* getQuestions(int* count);
 
 /* 回答问题的相关函数 */

@@ -123,9 +123,11 @@ void manage_questions_menu() {
     int subchoice;
     while (1) {
         printf("\n=== 题目管理 ===\n");
-        printf("1. 添加题目\n");
-        printf("2. 删除题目\n");
-        printf("3. 查看所有题目\n");
+        printf("1. 添加单个题目\n");
+        printf("2. 从 timu.txt 中批量添加题目\n");
+        printf("3. 删除单个题目\n");
+        printf("4. 删除所有题目\n");
+        printf("5. 查看所有题目\n");
         printf("0. 返回\n");
         printf("选择：");
         scanf("%d", &subchoice);
@@ -140,19 +142,21 @@ void manage_questions_menu() {
             fgets(trans, sizeof(trans), stdin);
             trans[strcspn(trans, "\r\n")] = 0;
             
-            if (addQuestion(word, trans)) {
+            if (addSingleQuestion(word, trans)) {
                 printf("[成功] 添加成功\n");
             }
         } else if (subchoice == 2) {
+            addQuestion("timu.txt");
+        } else if (subchoice == 3) {
             int qid;
             printf("题目ID：");
             scanf("%d", &qid);
             getchar();
             
-            if (deleteQuestion(qid)) {
+            if (deleteSingleQuestion(qid)) {
                 printf("[成功] 删除成功\n");
             }
-        } else if (subchoice == 3) {
+        } else if (subchoice == 5) {
             int count = 0;
             struct Question* q = getQuestions(&count);
             if (q && count > 0) {

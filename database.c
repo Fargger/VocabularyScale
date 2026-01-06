@@ -222,12 +222,12 @@ int deleteUser(const char* uuid) {
 }
 
 /**
- * @brief 添加题目
+ * @brief 添加单个题目
  * @param word 英文单词
  * @param translate 对应的翻译
  * @return 若添加成功，返回 1
  */
-int addQuestion(const char* word, const char* translate) {
+int addSingleQuestion(const char* word, const char* translate) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
     if (rc) {
@@ -262,10 +262,81 @@ int addQuestion(const char* word, const char* translate) {
 }
 
 /**
- * @brief 删除题目
+ * @brief 从 timu.txt 中批量添加题目
+ * @param source 文件名（"timu.txt"）
+ * @return 若添加成功，返回 1
+ */
+int addQuestion(const char* source) {
+    sqlite3 *db;
+    int rc = sqlite3_open("vocab_system.db", &db);
+    if (rc) {
+        fprintf(stderr, "[ERROR] Cannot open database\n");
+        return 0;
+    }
+
+    const char* sql = "INSERT INTO questions (word, translate) VALUES (?, ?)";
+    sqlite3_stmt* stmt = NULL;
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[ERROR] Prepare SQL failed\n");
+        sqlite3_close(db);
+        return 0;
+    }
+
+    FILE* f = fopen(source, "r");
+    if (!f) {
+        fprintf(stderr, "[ERROR] Cannot open source file: timu.txt\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    }
+
+    char line[512];
+    int inserted = 0;
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = 0;
+        if (line[0] == '\0') continue;
+
+        /* 支持以 tab 或 space 分隔的 "word translate" 格式 */
+        char* delim = strchr(line, '\t');
+        if (!delim) delim = strchr(line, ' ');
+        if (!delim) continue;
+
+        *delim = '\0';
+        char* word = line;
+        char* translate = delim + 1;
+        while (*translate == ' ' || *translate == '\t') translate++;
+
+        sqlite3_bind_text(stmt, 1, word, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, translate, -1, SQLITE_STATIC);
+
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            fprintf(stderr, "[ERROR] Insert question failed: %s\n", sqlite3_errmsg(db));
+            sqlite3_reset(stmt);
+            continue;
+        }
+        inserted++;
+        sqlite3_reset(stmt);
+    }
+
+    fclose(f);
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    if (inserted > 0) {
+        printf("[SUCCESS] %d questions added\n", inserted);
+        return 1;
+    } else {
+        fprintf(stderr, "[WARN] No questions were added\n");
+        return 0;
+    }
+}
+
+/**
+ * @brief 删除单个题目
  * @return 若删除成功，返回 1
  */
-int deleteQuestion(int qid) {
+int deleteSingleQuestion(int qid) {
     sqlite3 *db;
     int rc = sqlite3_open("vocab_system.db", &db);
     if (rc) return 0;
