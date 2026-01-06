@@ -2,7 +2,7 @@
 debug/
 report/
 init_db.sql
-vocab_system.de
+vocab_system.db
 vocab_system_refer.db
 *.txt
 *.exe

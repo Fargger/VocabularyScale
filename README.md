@@ -24,7 +24,7 @@ gcc -g *.c lib\sqlite3.c -o VocabularScale.exe
 
 # 测试数据说明
 
-本程序附带测试数据。由 `load_test_data.c` 实现。
+本程序附带测试数据。由 `load_test_data.c` 实现。运行时，将自动写入数据库。
 
 测试用户如下：
 | 用户名 | 用户类型(级别) | 班级 | 所属教师 |
