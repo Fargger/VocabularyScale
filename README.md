@@ -27,20 +27,20 @@ gcc -g *.c lib\sqlite3.c -o VocabularScale.exe
 本程序附带测试数据。由 `load_test_data.c` 实现。运行时，将自动写入数据库。
 
 测试用户如下：
-| 用户名 | 用户类型(级别) | 班级 | 所属教师 |
-| --- | --- | --- | --- |
-| stu0 | 学生(2) | 1 | teacher0 |
-| stu1 | 学生(2) | 1 | teacher0 |
-| stu2 | 学生(2) | 1 | teacher0 |
-| stu3 | 学生(2) | 1 | teacher0 |
-| stu4 | 学生(2) | 1 | teacher0 |
-| stu5 | 学生(2) | 2 | teacher1 |
-| stu6 | 学生(2) | 2 | teacher1 |
-| stu7 | 学生(2) | 2 | teacher1 |
-| stu8 | 学生(2) | 2 | teacher1 |
-| stu9 | 学生(2) | 2 | teacher1 |
-| teacher0 | 教师(1) | 1 | NULL |
-| teacher1 | 教师(1) | 2 | NULL |
+| 用户名 | 用户类型(级别) | 班级 | 所属教师 | 登录密码 |
+| --- | --- | --- | --- | --- |
+| stu0 | 学生(2) | 1 | teacher0 | 0 |
+| stu1 | 学生(2) | 1 | teacher0 | 0 |
+| stu2 | 学生(2) | 1 | teacher0 | 0 |
+| stu3 | 学生(2) | 1 | teacher0 | 0 |
+| stu4 | 学生(2) | 1 | teacher0 | 0 |
+| stu5 | 学生(2) | 2 | teacher1 | 0 |
+| stu6 | 学生(2) | 2 | teacher1 | 0 |
+| stu7 | 学生(2) | 2 | teacher1 | 0 |
+| stu8 | 学生(2) | 2 | teacher1 | 0 |
+| stu9 | 学生(2) | 2 | teacher1 | 0 |
+| teacher0 | 教师(1) | 1 | NULL | 0 |
+| teacher1 | 教师(1) | 2 | NULL | 0 |
 
 测试用户的 UUID 均为动态生成。
 
